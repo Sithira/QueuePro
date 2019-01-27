@@ -1,0 +1,27 @@
+server:
+  port: 1025
+
+spring:
+  rabbitmq:
+    username: "sithira"
+    password: "sithira"
+    host: "localhost"
+    port: 5672
+    virtual-host: "/"
+
+
+membership-consumer:
+  queue: "membership_api_requests_queue"
+  exchange: "membership_exchange"
+  routing_key: "membership_rKey"
+
+#logging:
+#  level:
+#    org.springframework.web: ERROR
+#    com.mkyong: DEBUG
+#  pattern:
+#    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+#    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+#  file: application.log
+
+
