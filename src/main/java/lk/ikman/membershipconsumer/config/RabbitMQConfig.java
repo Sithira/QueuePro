@@ -12,6 +12,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Configuration
 public class RabbitMQConfig {
 
@@ -42,17 +45,21 @@ public class RabbitMQConfig {
 
     @Bean
     Queue queue() {
-        return new Queue(queue, true);
+        return new Queue(queue, true, false, false);
     }
 
     @Bean
-    TopicExchange exchange() {
-        return new TopicExchange(exchange);
+    CustomExchange exchange() {
+
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-delayed-type", "topic");
+
+        return new CustomExchange(exchange, "x-delayed-message", true, false, args);
     }
 
     @Bean
-    Binding binding(Queue queue, TopicExchange exchange) {
-        return BindingBuilder.bind(queue).to(exchange).with(routingKey);
+    Binding binding(Queue queue, CustomExchange exchange) {
+        return BindingBuilder.bind(queue).to(exchange).with(routingKey).noargs();
     }
 
     @Bean
@@ -79,9 +86,14 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public AmqpTemplate rabbitAmqpTemplate(ConnectionFactory connectionFactory) {
+    public RabbitTemplate rabbitAmqpTemplate(ConnectionFactory connectionFactory) {
         final RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
-        rabbitTemplate.setMessageConverter(jsonMessageConverter());
+
+        rabbitTemplate.setExchange(exchange);
+        rabbitTemplate.setRoutingKey(routingKey);
+        rabbitTemplate.setDefaultReceiveQueue(queue);
+
+        //rabbitTemplate.setMessageConverter(jsonMessageConverter());
         return rabbitTemplate;
     }
 
@@ -93,10 +105,6 @@ public class RabbitMQConfig {
         container.setConnectionFactory(connectionFactory());
         container.setQueueNames(queue);
         container.setMessageListener(rabbitMQConsumer());
-
-        container.setErrorHandler(t -> {
-                //t.
-        });
 
         return container;
     }

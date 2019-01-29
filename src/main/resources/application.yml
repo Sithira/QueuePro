@@ -14,6 +14,7 @@ membership-consumer:
   queue: "membership_api_requests_queue"
   exchange: "membership_exchange"
   routing_key: "membership_rKey"
+  x_delay: 2000
 
 #logging:
 #  level:

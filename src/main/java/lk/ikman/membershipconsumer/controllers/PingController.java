@@ -17,7 +17,7 @@ public class PingController {
     @RequestMapping(method = RequestMethod.POST, value = "/test")
     public ResponseEntity test(@RequestBody String body) {
 
-        System.out.println(body);
+        System.out.println("ACKED FROM CONTROLLER");
 
         return ResponseEntity.ok(body);
     }
