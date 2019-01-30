@@ -1,7 +1,10 @@
 package lk.ikman.membershipconsumer.config;
 
 import lk.ikman.membershipconsumer.services.RabbitMQConsumer;
-import org.springframework.amqp.core.*;
+import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.CustomExchange;
+import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -37,15 +40,26 @@ public class RabbitMQConfig {
     @Value("${membership-consumer.queue}")
     private String queue;
 
+    @Value("${membership-consumer.success_queue}")
+    private String success_queue;
+
     @Value("${membership-consumer.exchange}")
     private String exchange;
 
     @Value("${membership-consumer.routing_key}")
     private String routingKey;
 
+    @Value("${membership-consumer.success_routing_key}")
+    private String success_routing_key;
+
     @Bean
     Queue queue() {
         return new Queue(queue, true, false, false);
+    }
+
+    @Bean
+    Queue successQueue() {
+        return new Queue(success_queue, true, false, false);
     }
 
     @Bean
@@ -60,6 +74,11 @@ public class RabbitMQConfig {
     @Bean
     Binding binding(Queue queue, CustomExchange exchange) {
         return BindingBuilder.bind(queue).to(exchange).with(routingKey).noargs();
+    }
+
+    @Bean
+    Binding successBinding(Queue successQueue, CustomExchange exchange) {
+        return BindingBuilder.bind(successQueue).to(exchange).with(success_routing_key).noargs();
     }
 
     @Bean
@@ -86,15 +105,19 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public RabbitTemplate rabbitAmqpTemplate(ConnectionFactory connectionFactory) {
-        final RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
+    public RabbitTemplate defaultRabbitMQTemplate(ConnectionFactory connectionFactory) {
+        RabbitTemplate template = setTemplate(connectionFactory, exchange);
+        template.setDefaultReceiveQueue(queue);
+        template.setRoutingKey(routingKey);
+        return template;
+    }
 
-        rabbitTemplate.setExchange(exchange);
-        rabbitTemplate.setRoutingKey(routingKey);
-        rabbitTemplate.setDefaultReceiveQueue(queue);
-
-        //rabbitTemplate.setMessageConverter(jsonMessageConverter());
-        return rabbitTemplate;
+    @Bean
+    public RabbitTemplate successRabbitMQTemplate(ConnectionFactory connectionFactory) {
+        RabbitTemplate template = setTemplate(connectionFactory, exchange);
+        template.setDefaultReceiveQueue(success_queue);
+        template.setRoutingKey(success_routing_key);
+        return template;
     }
 
     @Bean
@@ -107,5 +130,14 @@ public class RabbitMQConfig {
         container.setMessageListener(rabbitMQConsumer());
 
         return container;
+    }
+
+    private RabbitTemplate setTemplate(ConnectionFactory factory, String exchange) {
+        final RabbitTemplate rabbitTemplate = new RabbitTemplate(factory);
+
+        rabbitTemplate.setExchange(exchange);
+
+        //rabbitTemplate.setMessageConverter(jsonMessageConverter());
+        return rabbitTemplate;
     }
 }

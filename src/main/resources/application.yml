@@ -12,9 +12,12 @@ spring:
 
 membership-consumer:
   queue: "membership_api_requests_queue"
+  success_queue: "membership_api_requests_success_queue"
   exchange: "membership_exchange"
-  routing_key: "membership_rKey"
+  routing_key: "membership_key_default"
+  success_routing_key: "membership_key_success"
   x_delay: 2000
+
 
 #logging:
 #  level:
@@ -22,7 +25,15 @@ membership-consumer:
 #    com.mkyong: DEBUG
 #  pattern:
 #    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
-#    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+#    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-level %logger{36} - %msg%n"
 #  file: application.log
+logging:
+  level:
+    org.springframework.web: ERROR
+    lk.ikman.membershipconsumer: DEBUG
 
+  file: "application.log"
+
+  pattern:
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-2level %logger{36} - %msg%n"
 

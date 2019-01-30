@@ -5,6 +5,7 @@ import com.mashape.unirest.http.JsonNode;
 import com.mashape.unirest.http.Unirest;
 import com.mashape.unirest.http.exceptions.UnirestException;
 import com.rabbitmq.client.Channel;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,31 +26,47 @@ public class RabbitMQConsumer implements ChannelAwareMessageListener {
     private static final String X_RETRIES_HEADER = "x-retries";
 
     @Autowired
-    @Qualifier(value = "rabbitAmqpTemplate")
+    @Qualifier(value = "defaultRabbitMQTemplate")
     private RabbitTemplate rabbitTemplate;
+
+    @Autowired
+    @Qualifier(value = "successRabbitMQTemplate")
+    private RabbitTemplate rabbitTemplateSuccess;
 
     @Override
     public void onMessage(Message message, Channel channel) throws Exception {
 
-        toLogs(message);
+        toLogs(message, false);
 
         final String payload = new String(message.getBody(), StandardCharsets.UTF_8);
 
-        final JSONObject jsonObject = new JSONObject(payload);
-
-        final HttpResponse<JsonNode> response = makeHttpCall(jsonObject);
+        final HttpResponse<JsonNode> response = makeHttpCall(payload);
 
         final long DELIVERY_TAG = message.getMessageProperties().getDeliveryTag();
 
         if (response != null) {
 
-            if (response.getStatus() == 200 && response.getBody() == null) {
-                channel.basicAck(message.getMessageProperties().getDeliveryTag(), true);
+            if (response.getStatus() == 200 && response.getBody() != null) {
+                //channel.basicAck(DELIVERY_TAG, false);
+
+                final Message msg = rebuildMessageAsNew(addResponseToMessageBody(message, response.getBody()));
+
+                rabbitTemplateSuccess.send(msg);
+
+                toLogs(msg, true);
+
                 return;
             }
 
-            if (response.getStatus() == 200 || response.getStatus() == 201) {
-                channel.basicAck(DELIVERY_TAG, true);
+            if ((response.getStatus() == 200 || response.getStatus() == 201) && response.getBody() != null) {
+                //channel.basicAck(DELIVERY_TAG, false);
+
+                final Message msg = rebuildMessageAsNew(addResponseToMessageBody(message, response.getBody()));
+
+                rabbitTemplateSuccess.send(msg);
+
+                toLogs(msg, true);
+
                 return;
             }
 
@@ -71,7 +88,7 @@ public class RabbitMQConsumer implements ChannelAwareMessageListener {
 
                     message.getMessageProperties().getHeaders().put("x-delay", (2000 * 60));
 
-                    rabbitTemplate.send(attemptToRepair(message));
+                    rabbitTemplate.send(rebuildMessage(message));
                 }
 
             } else {
@@ -80,34 +97,54 @@ public class RabbitMQConsumer implements ChannelAwareMessageListener {
 
                 message.getMessageProperties().getHeaders().put("x-delay", (2000 * 60));
 
-                rabbitTemplate.send(attemptToRepair(message));
+                rabbitTemplate.send(rebuildMessage(message));
             }
         }
 
     }
 
-    private HttpResponse<JsonNode> makeHttpCall(JSONObject request) {
-
-        final String URL_TO_REST = request.get("url").toString();
+    /**
+     * Make the HTTP Call for the decoded URL from the payload.
+     *
+     * @param payload String
+     * @return HttpResponse<JsonNode>
+     */
+    private HttpResponse<JsonNode> makeHttpCall(String payload) {
 
         try {
+            // convert the string to json
+            final JSONObject request = new JSONObject(payload);
 
-            return Unirest
-                    .post(URL_TO_REST)
-                    .body(request)
-                    .asJson();
+            // get the callable url from the object
+            final String URL_TO_REST = request.get("url").toString();
 
-        } catch (UnirestException e) {
+            try {
 
-            e.printStackTrace();
+                return Unirest
+                        .post(URL_TO_REST)
+                        .body(request)
+                        .asJson();
 
-            return null;
-        } finally {
-            // todo: some logs
+            } catch (UnirestException e) {
+
+                LOGGER.debug(" Http call exception cause: " + e.getCause().toString());
+
+                return null;
+            }
+        } catch (JSONException exp) {
+            exp.printStackTrace();
         }
+
+        return null;
     }
 
-    private void toLogs(Message message) {
+    /**
+     * Add the message to the Log files.
+     *
+     * @param message     Message
+     * @param hasResponse has sent HTTP Requests
+     */
+    private void toLogs(Message message, boolean hasResponse) {
 
         final MessageProperties messageProperties = message.getMessageProperties();
 
@@ -119,15 +156,66 @@ public class RabbitMQConsumer implements ChannelAwareMessageListener {
         LOGGER.debug(" Timestamp   : " + messageProperties.getTimestamp());
         LOGGER.debug(" Service     : " + messageProperties.getHeaders().get("service"));
         LOGGER.debug(" Content-Type: " + messageProperties.getContentType());
+
+        // if has response, add the response to logs too.
+        if (hasResponse) {
+            JSONObject response = new JSONObject(new String(message.getBody(), StandardCharsets.UTF_8));
+
+            LOGGER.debug(" Response: " + response.get("response"));
+        }
+
         LOGGER.debug(" Encoding    : " + messageProperties.getContentEncoding());
         LOGGER.debug(" Message     : " + body);
         LOGGER.debug("*************** End ***************");
 
     }
 
-    private Message attemptToRepair(Message failedMessage) {
+    /**
+     * Rebuild an already existing message.
+     *
+     * @param failedMessage Message
+     * @return Message
+     */
+    private Message rebuildMessage(Message failedMessage) {
         String messageBody = new String(failedMessage.getBody());
 
         return MessageBuilder.withBody(messageBody.getBytes()).copyHeaders(failedMessage.getMessageProperties().getHeaders()).build();
+    }
+
+    /**
+     * This will recreate a already existing message as a new message
+     * to requeue and set the content type as JSON.
+     * <p>
+     * most likely it(message) has failed in the first attempt.
+     *
+     * @param successMessage Message RabbitMQ
+     * @return Message
+     */
+    private Message rebuildMessageAsNew(Message successMessage) {
+
+        return MessageBuilder
+                .withBody(successMessage.getBody())
+                .setHeader("content_type", "application/json")
+                .build();
+    }
+
+    /**
+     * When a message is provided, as well as a jsonNode (a response)
+     * it will add the response to the message body.
+     * <p>
+     * This message will be used only to push a message to a success queue.
+     *
+     * @param message  Message RabbitMQ
+     * @param response JsonNode as the response
+     * @return Message
+     */
+    private Message addResponseToMessageBody(Message message, JsonNode response) {
+        JSONObject request = new JSONObject(new String(message.getBody(), StandardCharsets.UTF_8));
+
+        request.put("response", response.toString());
+
+        return MessageBuilder
+                .withBody(request.toString().getBytes())
+                .build();
     }
 }
