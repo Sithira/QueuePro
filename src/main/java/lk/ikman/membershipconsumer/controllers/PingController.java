@@ -1,5 +1,6 @@
 package lk.ikman.membershipconsumer.controllers;
 
+import org.json.JSONObject;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,9 +18,15 @@ public class PingController {
     @RequestMapping(method = RequestMethod.POST, value = "/test")
     public ResponseEntity test(@RequestBody String body) {
 
-        System.out.println("ACKED FROM CONTROLLER");
+        JSONObject fakeResponse = new JSONObject(body);
 
-        return ResponseEntity.ok(body);
+        if (fakeResponse.has("body")) {
+            System.out.println("ACKE'D FROM CONTROLLER");
+        }
+
+        fakeResponse.put("status", "OK");
+
+        return ResponseEntity.ok(fakeResponse.toString());
     }
 
 }

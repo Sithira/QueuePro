@@ -4,6 +4,7 @@ import com.mashape.unirest.http.HttpResponse;
 import com.mashape.unirest.http.JsonNode;
 import com.mashape.unirest.http.Unirest;
 import com.mashape.unirest.http.exceptions.UnirestException;
+import com.mashape.unirest.request.HttpRequestWithBody;
 import com.rabbitmq.client.Channel;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -38,7 +39,7 @@ public class RabbitMQConsumer implements ChannelAwareMessageListener {
 
         toLogs(message, false);
 
-        final String payload = new String(message.getBody(), StandardCharsets.UTF_8);
+        final String payload = new String(message.getBody());
 
         final HttpResponse<JsonNode> response = makeHttpCall(payload);
 
@@ -78,7 +79,7 @@ public class RabbitMQConsumer implements ChannelAwareMessageListener {
 
                 if (retryCount > 3) {
 
-                    System.out.println("Retry Exceeded....");
+                    LOGGER.debug("Retrying exceeded (count exceeded)");
 
                     channel.basicNack(DELIVERY_TAG, true, false);
 
@@ -118,12 +119,44 @@ public class RabbitMQConsumer implements ChannelAwareMessageListener {
             // get the callable url from the object
             final String URL_TO_REST = request.get("url").toString();
 
+            final JSONObject request_body = request.getJSONObject("body");
+
+            final String method = request.getString("method");
+
+            String authentication = null;
+
+            // check and set the authentication from message payload.
+            if (request.has("authentication")) {
+                authentication = request.getString("authentication");
+            }
+
             try {
 
-                return Unirest
-                        .post(URL_TO_REST)
-                        .body(request)
-                        .asJson();
+                HttpRequestWithBody unirest;
+
+                // find the method that we need to make the rest call for.
+                switch (method.toLowerCase()) {
+
+                    case "patch":
+                        unirest = Unirest.patch(URL_TO_REST);
+                        break;
+
+                    case "put":
+                        unirest = Unirest.put(URL_TO_REST);
+                        break;
+
+                    default:
+                    case "post":
+                        unirest = Unirest.post(URL_TO_REST);
+                        break;
+
+                }
+
+                // set the auth key for the requests
+                unirest = setBasicAuthentication(authentication, unirest);
+
+                // fire the REST call
+                unirest.body(request_body).asJson();
 
             } catch (UnirestException e) {
 
@@ -136,6 +169,28 @@ public class RabbitMQConsumer implements ChannelAwareMessageListener {
         }
 
         return null;
+    }
+
+    /**
+     * Set authentication to the request if the payload has set an authentication key.
+     *
+     * @param authentication Authentication token
+     * @param unirest        Unirest Instance
+     * @return HttpRequestWithBody
+     */
+    private HttpRequestWithBody setBasicAuthentication(String authentication, HttpRequestWithBody unirest) {
+
+        if (authentication != null) {
+            String[] auth = authentication.split(":");
+
+            String username = auth[0];
+
+            String password = auth[1];
+
+            unirest.basicAuth(username, password);
+        }
+
+        return unirest;
     }
 
     /**
@@ -204,6 +259,7 @@ public class RabbitMQConsumer implements ChannelAwareMessageListener {
      * it will add the response to the message body.
      * <p>
      * This message will be used only to push a message to a success queue.
+     * </p>
      *
      * @param message  Message RabbitMQ
      * @param response JsonNode as the response
