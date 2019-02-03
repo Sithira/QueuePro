@@ -11,7 +11,7 @@ spring:
 
 
 membership-consumer:
-  queue: "membership_api_requests_queue"
+  api_queue: "membership_api_requests_queue"
   success_queue: "membership_api_requests_success_queue"
   exchange: "membership_exchange"
   routing_key: "membership_key_default"

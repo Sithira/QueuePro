@@ -1,6 +1,7 @@
 package lk.ikman.membershipconsumer.config;
 
-import lk.ikman.membershipconsumer.services.RabbitMQConsumer;
+import lk.ikman.membershipconsumer.consumers.APIQueueConsumer;
+import lk.ikman.membershipconsumer.consumers.SuccessQueueConsumer;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.CustomExchange;
@@ -19,7 +20,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Configuration
-public class RabbitMQConfig {
+public class QueueConfig {
 
     @Value("${spring.rabbitmq.host}")
     private String host;
@@ -37,8 +38,8 @@ public class RabbitMQConfig {
     private String virtual_host;
 
 
-    @Value("${membership-consumer.queue}")
-    private String queue;
+    @Value("${membership-consumer.api_queue}")
+    private String api_queue;
 
     @Value("${membership-consumer.success_queue}")
     private String success_queue;
@@ -53,8 +54,8 @@ public class RabbitMQConfig {
     private String success_routing_key;
 
     @Bean
-    Queue queue() {
-        return new Queue(queue, true, false, false);
+    Queue apiQueue() {
+        return new Queue(api_queue, true, false, false);
     }
 
     @Bean
@@ -72,8 +73,8 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    Binding binding(Queue queue, CustomExchange exchange) {
-        return BindingBuilder.bind(queue).to(exchange).with(routingKey).noargs();
+    Binding apiBinding(Queue apiQueue, CustomExchange exchange) {
+        return BindingBuilder.bind(apiQueue).to(exchange).with(routingKey).noargs();
     }
 
     @Bean
@@ -82,8 +83,13 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public RabbitMQConsumer rabbitMQConsumer() {
-        return new RabbitMQConsumer();
+    public APIQueueConsumer apiQueueConsumer() {
+        return new APIQueueConsumer();
+    }
+
+    @Bean
+    public SuccessQueueConsumer successQueueConsumer() {
+        return new SuccessQueueConsumer();
     }
 
     @Bean
@@ -105,9 +111,9 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public RabbitTemplate defaultRabbitMQTemplate(ConnectionFactory connectionFactory) {
+    public RabbitTemplate apiRabbitMQTemplate(ConnectionFactory connectionFactory) {
         RabbitTemplate template = setTemplate(connectionFactory, exchange);
-        template.setDefaultReceiveQueue(queue);
+        template.setDefaultReceiveQueue(api_queue);
         template.setRoutingKey(routingKey);
         return template;
     }
@@ -121,17 +127,26 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public SimpleMessageListenerContainer membershipQueueConsumer() {
-
-        SimpleMessageListenerContainer container = new SimpleMessageListenerContainer();
-
-        container.setConnectionFactory(connectionFactory());
-        container.setQueueNames(queue);
-        container.setMessageListener(rabbitMQConsumer());
-
+    public SimpleMessageListenerContainer apiQueueMessageContainer() {
+        SimpleMessageListenerContainer container = buildMessageContainer(api_queue);
+        container.setMessageListener(apiQueueConsumer());
         return container;
     }
 
+    @Bean
+    public SimpleMessageListenerContainer successQueueMessageContainer() {
+        SimpleMessageListenerContainer container = buildMessageContainer(success_queue);
+        container.setMessageListener(successQueueConsumer());
+        return container;
+    }
+
+    /**
+     * Build RabbitTemplate with provided params
+     *
+     * @param factory  Connection for the listener to listen
+     * @param exchange Queue exchange
+     * @return RabbitTemplate
+     */
     private RabbitTemplate setTemplate(ConnectionFactory factory, String exchange) {
         final RabbitTemplate rabbitTemplate = new RabbitTemplate(factory);
 
@@ -139,5 +154,20 @@ public class RabbitMQConfig {
 
         //rabbitTemplate.setMessageConverter(jsonMessageConverter());
         return rabbitTemplate;
+    }
+
+    /**
+     * Build SimpleMessageListenerContainer for the apiQueue provided.
+     *
+     * @param queue Queue name
+     * @return SimpleMessageListenerContainer
+     */
+    private SimpleMessageListenerContainer buildMessageContainer(String queue) {
+        SimpleMessageListenerContainer container = new SimpleMessageListenerContainer();
+
+        container.setConnectionFactory(connectionFactory());
+        container.setQueueNames(queue);
+
+        return container;
     }
 }
