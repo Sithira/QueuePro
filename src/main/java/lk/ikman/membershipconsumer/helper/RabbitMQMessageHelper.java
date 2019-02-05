@@ -20,6 +20,7 @@ public class RabbitMQMessageHelper {
      *
      * @param message     Message
      * @param hasResponse has sent HTTP Requests
+     * @param LOGGER for logging purposes
      */
     public void toLogs(Message message, boolean hasResponse, Logger LOGGER) {
 

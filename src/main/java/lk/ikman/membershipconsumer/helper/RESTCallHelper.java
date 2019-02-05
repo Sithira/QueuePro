@@ -19,7 +19,7 @@ public class RESTCallHelper {
      * Make the HTTP Call for the decoded URL from the payload.
      *
      * @param request Request
-     * @return HttpResponse<JsonNode>
+     * @return JSON Response as a string
      */
     public HttpResponse<JsonNode> makeHttpCall(Request request) {
         try {

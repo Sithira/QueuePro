@@ -9,22 +9,12 @@ import lk.ikman.membershipconsumer.models.Request;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Message;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.rabbit.listener.api.ChannelAwareMessageListener;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 
 public class APIQueueConsumer extends BaseConsumer implements ChannelAwareMessageListener {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(APIQueueConsumer.class);
-
-    @Autowired
-    @Qualifier(value = "apiRabbitMQTemplate")
-    private RabbitTemplate rabbitTemplate;
-
-    @Autowired
-    @Qualifier(value = "successRabbitMQTemplate")
-    private RabbitTemplate rabbitTemplateSuccess;
 
     @Autowired
     private RESTCallHelper restCallHelper;

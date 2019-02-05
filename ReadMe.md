@@ -1,8 +1,6 @@
 ### S-QUEUE Pro
 
-<p>
 QueuePro basically helps you to call all the API calls to external services through this and retries if fails.
-</p>
 
 #### How QueuePro works ?
 
@@ -17,7 +15,7 @@ queues calls, thus handling error responses as same as the default queue.
 
 QueuePro will give up retrying after 5th time and Negatively acknowledges to the respective queue. 
 
-#### Payload Structure
+#### Payload structure
 For QueuePro to work, you need a basic JSON payload structure as mentioned below.
 ```json
 {  
@@ -38,7 +36,7 @@ For QueuePro to work, you need a basic JSON payload structure as mentioned below
 }
 ```
 
-#### Authenticated Resources
+#### Authenticated resources
 QueuePro supports basic authentication for now.
 ```json
 {
@@ -48,7 +46,7 @@ QueuePro supports basic authentication for now.
 As mentioned above you must have the authentication field filled with username and password separated by a ":", QueuePro
 will handle the rest for you.
 
-#### How to add a new Queue to the QueuePro
+#### How to add a new queue to the QueuePro
 
 All the configurations for the QP are stored in application.yml.
 These are the default configs for the QP beside default Spring configs.
@@ -62,7 +60,39 @@ membership-consumer:
   x_delay: 2000
 ```
 
-but if you want to add a separate queue for some reason, here are the steps.
+#### Creating a new consumer
+Creating a consumer is not as hard as it sounds. below are the steps to create you own queue consumer.
+
+* Create a new JAVA class under the membershipconsumer.consumers package
+* Extend it from BaseConsumer and implement it from `ChannelAwareMessageListener` (you can implement any message listener)
+* You can use `isSuccess()` method to check the successes of the external API call and `handleFailed()` method to handle 
+the failed fails. These methods are already implemented, but if you want to use your own logic you are free to override 
+them. 
+
+```java
+class MyNewConsumer extends BaseConsumer implements ChannelAwareMessageListener {
+    
+        @Autowired
+        private RESTCallHelper restCallHelper;
+    
+        @Autowired
+        private RabbitMQMessageHelper rabbitMQMessageHelper;
+        
+        if (isSuccess()) {
+            // your success logic
+        } else {
+            handleFailed();
+        }
+    
+}
+```
 
 
 #### About BaseConsumer
+
+BaseConsumer is the parent class that handles all the queue logic and letting us to separate queue logic.
+You can use `isSuccess()` method to check the successes of the external API call and `handleFailed()` method to handle 
+the failed fails. These methods are already implemented, but if you want to use your own logic you are free to override 
+them. 
+
+#### Testing

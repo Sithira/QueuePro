@@ -14,9 +14,13 @@ import org.springframework.beans.factory.annotation.Qualifier;
 
 import java.io.IOException;
 
-class BaseConsumer {
+/**
+ * BaseConsumer to extend all child Queue Consumers.
+ */
+public class BaseConsumer {
 
-    protected static final String X_RETRIES_HEADER = "x-retries";
+    private static final String X_RETRIES_HEADER = "x-retries";
+
     @Autowired
     @Qualifier(value = "apiRabbitMQTemplate")
     private RabbitTemplate rabbitTemplate;
@@ -28,6 +32,14 @@ class BaseConsumer {
     @Autowired
     private RabbitMQMessageHelper rabbitMQMessageHelper;
 
+    /**
+     * Check for success response from the external api call.
+     *
+     * @param message  Message that contains json payload
+     * @param response Response from external call
+     * @param LOGGER   For logging purposes
+     * @return has external API call returned a success response.
+     */
     protected boolean isSuccess(Message message, HttpResponse<JsonNode> response, Logger LOGGER) {
         if (response.getStatus() == 200 && response.getBody() != null) {
             //channel.basicAck(DELIVERY_TAG, false);
@@ -46,13 +58,24 @@ class BaseConsumer {
         return false;
     }
 
+    /**
+     * Handle the response failed API call, requeue back to same queue if necessary.
+     *
+     * @param message RabbitMQ message
+     * @param channel Default message channel
+     * @param requeue Should requeue back to original queue
+     * @param LOGGER  For logging purposes.
+     * @throws IOException if json body gets failed to deserialize
+     */
     protected void handleFailed(Message message, Channel channel, boolean requeue, Logger LOGGER)
             throws IOException {
 
         long DELIVERY_TAG = message.getMessageProperties().getDeliveryTag();
 
+        // int the retry count.
         int retryCount;
 
+        // check for the retry header
         if (message.getMessageProperties().getHeaders().containsKey(X_RETRIES_HEADER)) {
 
             retryCount = (int) message.getMessageProperties().getHeaders().get(X_RETRIES_HEADER);
@@ -98,7 +121,13 @@ class BaseConsumer {
         }
     }
 
-
+    /**
+     * Make the HTTP call to the external service.
+     *
+     * @param request Json payload from the message publisher
+     * @return Json response as a string
+     * @throws IOException when unable to deserialize
+     */
     protected HttpResponse<JsonNode> getResponse(Request request) throws IOException {
 
         return restCallHelper.makeHttpCall(request);
